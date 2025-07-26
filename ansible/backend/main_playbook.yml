@@ -1,0 +1,38 @@
+---
+- name: Configuring Backend Services
+  hosts: localhost
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Including Docker playbook
+      include_tasks: ../docker.yml
+
+    - name: Creating configuration directory
+      file:
+        path: /opt/config
+        state: directory
+
+    - name: Configuring Backend Service
+      block:
+        - name: Creating Backend Environment File
+          shell: envsubst < /opt/bootstrap/ansible/ansible/backend/template.env > /opt/config/.env
+          environment:
+            DB_HOST: "{{ db_host }}"
+            DB_USER: "{{ db_user }}"
+            DB_PASSWORD: "{{ db_password }}"
+            DB_NAME: "{{ db_name }}"
+            BACKEND_PORT: "{{ backend_port }}"
+
+        - name: Copying Docker Compose File for Backend
+          copy:
+            src: /opt/bootstrap/ansible/ansible/backend/docker-compose.template.yml
+            dest: /opt/config/docker-compose.yml
+            mode: '0644'
+
+        - name: Running Docker Compose for Backend
+          command: docker compose up -d
+          args:
+            chdir: /opt/config
+    
+
+

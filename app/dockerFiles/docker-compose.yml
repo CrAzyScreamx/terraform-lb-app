@@ -1,0 +1,79 @@
+services:
+
+  mysql:
+    image: mysql:latest
+    container_name: mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: 123123
+      MYSQL_DATABASE: DemoDB
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: 123123
+    volumes:
+      - ../data/mysql:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - app-network
+
+  tasks-api:
+    image: ghcr.io/crazyscreamx/task-manager-backend:latest
+    container_name: tasks-api
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: admin
+      DB_PASSWORD: 123123
+      DB_NAME: DemoDB
+    ports:
+      - "8000:8000"
+    networks:
+      - app-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: root
+      PMA_PASSWORD: 123123
+    ports:
+      - "8080:80"
+    networks:
+      - app-network
+
+  tasks-frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        BACKEND_URL: ${BACKEND_URL}
+    container_name: tasks-frontend
+    restart: unless-stopped
+    depends_on:
+      - tasks-api
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    environment:
+      - BACKEND_URL=${BACKEND_URL}
+      - CHOKIDAR_USEPOLLING=true
+    stdin_open: true
+    tty: true
+
+networks:
+  app-network:
+    driver: bridge

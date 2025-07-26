@@ -1,0 +1,34 @@
+---
+- name: Configuring Frontend Services
+  hosts: localhost
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Including Docker playbook
+      include_tasks: ../docker.yml
+
+    - name: Creating configuration directory
+      file:
+        path: /opt/config
+        state: directory
+
+    - name: Configuring Frontend Service
+      block:
+        - name: Creating Frontend Environment File
+          shell: envsubst < /opt/bootstrap/ansible/ansible/frontend/template.env > /opt/config/.env
+          environment:
+            BACKEND_URL: "{{ backend_url }}"
+
+        - name: Copying Docker Compose File for Frontend
+          copy:
+            src: /opt/bootstrap/ansible/ansible/frontend/docker-compose.template.yml
+            dest: /opt/config/docker-compose.yml
+            mode: '0644'
+
+        - name: Running Docker Compose for Frontend
+          command: docker compose up -d
+          args:
+            chdir: /opt/config
+    
+
+
