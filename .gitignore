@@ -1,0 +1,8 @@
+/app/backend/.venv
+/app/backend/__pycache__
+/app/backend/routes/__pycache__
+/app/backend/.env
+/app/data
+/terraform/.terraform
+/terraform/keys/*
+/terraform/scripts/.env
