@@ -7,9 +7,9 @@ output "frontend_public_ip" {
 }
 
 output "backend_private_ips" {
-  value = azurerm_network_interface.backend-nic[*].private_ip_address
+  value = module.backend-nic[*].private_ip_address
 }
 
 output "frontend_private_ip" {
-  value = azurerm_network_interface.frontend-nic.private_ip_address
+  value = module.frontend-nic.private_ip_address
 }

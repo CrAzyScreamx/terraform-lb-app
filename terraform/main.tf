@@ -1,4 +1,3 @@
-
 ### Firewall Subnet - NVA Configuration ###
 resource "azurerm_resource_group" "main" {
   name     = "rg-${var.environment_name}-${var.application_name}"
@@ -19,17 +18,12 @@ resource "azurerm_subnet" "nva-subnet" {
   address_prefixes     = [local.azure_nva_subnet]
 }
 
-resource "azurerm_network_interface" "nva-nic" {
-  name                  = "nic-${var.environment_name}-${var.application_name}-nva"
-  location              = azurerm_resource_group.main.location
-  resource_group_name   = azurerm_resource_group.main.name
-  ip_forwarding_enabled = true
-
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.nva-subnet.id
-    private_ip_address_allocation = "Dynamic"
-  }
+module "nva-nic" {
+  source                     = "./modules/network_interface"
+  name                       = "nic-${var.environment_name}-${var.application_name}-nva"
+  location                   = azurerm_resource_group.main.location
+  resource_group_name        = azurerm_resource_group.main.name
+  ip_configuration_subnet_id = azurerm_subnet.nva-subnet.id
 }
 
 module "nva-vm" {
@@ -37,10 +31,10 @@ module "nva-vm" {
   name                     = "vm-${var.environment_name}-${var.application_name}-nva"
   location                 = azurerm_resource_group.main.location
   resource_group_name      = azurerm_resource_group.main.name
-  network_interface_ids    = [azurerm_network_interface.nva-nic.id]
+  network_interface_ids    = [module.nva-nic.id]
   boot_diagnostics_enabled = true
 
-  custom_data = base64encode(templatefile("/initScripts/init-nva.sh", {
+  custom_data = base64encode(templatefile("initScripts/init-nva.sh", {
     tunnel_token    = data.cloudflare_zero_trust_tunnel_cloudflared_token.main.token
     backend_subnet  = local.azure_backend_subnet
     frontend_subnet = local.azure_frontend_subnet
@@ -69,17 +63,13 @@ resource "azurerm_public_ip" "frontend-pip" {
   allocation_method   = "Static"
 }
 
-resource "azurerm_network_interface" "frontend-nic" {
-  name                = "nic-${var.environment_name}-${var.application_name}-frontend-pip"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.frontend-subnet.id
-    private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.frontend-pip.id
-  }
+module "frontend-nic" {
+  source                                = "./modules/network_interface"
+  name                                  = "nic-${var.environment_name}-${var.application_name}-frontend-pip"
+  location                              = azurerm_resource_group.main.location
+  resource_group_name                   = azurerm_resource_group.main.name
+  ip_configuration_subnet_id            = azurerm_subnet.frontend-subnet.id
+  ip_configuration_public_ip_address_id = azurerm_public_ip.frontend-pip.id
 }
 
 resource "azurerm_network_security_group" "frontend-nsg" {
@@ -103,7 +93,7 @@ resource "azurerm_network_security_rule" "allow-http-frontend" {
 }
 
 resource "azurerm_network_interface_security_group_association" "frontend-nic-nsg" {
-  network_interface_id      = azurerm_network_interface.frontend-nic.id
+  network_interface_id      = module.frontend-nic.id
   network_security_group_id = azurerm_network_security_group.frontend-nsg.id
 }
 
@@ -112,10 +102,10 @@ module "frontend-vm" {
   name                     = "vm-${var.environment_name}-${var.application_name}-frontend"
   location                 = azurerm_resource_group.main.location
   resource_group_name      = azurerm_resource_group.main.name
-  network_interface_ids    = [azurerm_network_interface.frontend-nic.id]
+  network_interface_ids    = [module.frontend-nic.id]
   boot_diagnostics_enabled = true
 
-  custom_data = base64encode(templatefile("/initScripts/init-frontend.sh", {
+  custom_data = base64encode(templatefile("initScripts/init-frontend.sh", {
     backend_url = "http://${azurerm_lb.backend-lb.frontend_ip_configuration[0].private_ip_address}:${var.load_balancer_frontend_port}"
   }))
 }
@@ -134,17 +124,14 @@ resource "azurerm_subnet" "backend-subnet" {
   address_prefixes     = [local.azure_backend_subnet]
 }
 
-resource "azurerm_network_interface" "backend-nic" {
-  count               = var.backend_count
-  name                = "nic-${var.environment_name}-${var.application_name}-backend-${count.index}"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+module "backend-nic" {
+  count                      = var.backend_count
+  source                     = "./modules/network_interface"
+  name                       = "nic-${var.environment_name}-${var.application_name}-backend-${count.index}"
+  location                   = azurerm_resource_group.main.location
+  resource_group_name        = azurerm_resource_group.main.name
+  ip_configuration_subnet_id = azurerm_subnet.backend-subnet.id
 
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.backend-subnet.id
-    private_ip_address_allocation = "Dynamic"
-  }
 }
 
 resource "azurerm_lb" "backend-lb" {
@@ -171,7 +158,7 @@ resource "azurerm_lb_rule" "backend-lb-rule" {
   protocol                       = "Tcp"
   frontend_port                  = var.load_balancer_frontend_port
   backend_port                   = var.load_balancer_backend_port
-  frontend_ip_configuration_name = "internal"
+  frontend_ip_configuration_name = azurerm_lb.backend-lb.frontend_ip_configuration[0].name
   probe_id                       = azurerm_lb_probe.backend-lb-probe.id
   load_distribution              = "Default"
   backend_address_pool_ids = [
@@ -191,7 +178,7 @@ resource "azurerm_lb_probe" "backend-lb-probe" {
 
 resource "azurerm_network_interface_backend_address_pool_association" "backend-nic-pool" {
   count                   = var.backend_count
-  network_interface_id    = azurerm_network_interface.backend-nic[count.index].id
+  network_interface_id    = module.backend-nic[count.index].id
   ip_configuration_name   = "internal"
   backend_address_pool_id = azurerm_lb_backend_address_pool.backend-pool.id
 }
@@ -202,7 +189,7 @@ module "backend-vms" {
   name                     = "vm-${var.environment_name}-${var.application_name}-backend-${count.index}"
   location                 = azurerm_resource_group.main.location
   resource_group_name      = azurerm_resource_group.main.name
-  network_interface_ids    = [azurerm_network_interface.backend-nic[count.index].id]
+  network_interface_ids    = [module.backend-nic[count.index].id]
   boot_diagnostics_enabled = true
 
   custom_data = base64encode(templatefile("initScripts/init-backend.sh", {
@@ -265,7 +252,7 @@ resource "azurerm_route_table" "frontend-rules" {
     name                   = "frontend-to-backend-lb"
     address_prefix         = "${azurerm_lb.backend-lb.frontend_ip_configuration[0].private_ip_address}/32"
     next_hop_type          = "VirtualAppliance"
-    next_hop_in_ip_address = azurerm_network_interface.nva-nic.private_ip_address
+    next_hop_in_ip_address = module.nva-nic.private_ip_address
   }
 }
 
@@ -281,16 +268,16 @@ resource "azurerm_route_table" "backend-rules" {
 
   route {
     name                   = "backend-to-frontend-vm"
-    address_prefix         = "${azurerm_network_interface.frontend-nic.private_ip_address}/32"
+    address_prefix         = "${module.frontend-nic.private_ip_address}/32"
     next_hop_type          = "VirtualAppliance"
-    next_hop_in_ip_address = azurerm_network_interface.nva-nic.private_ip_address
+    next_hop_in_ip_address = module.nva-nic.private_ip_address
   }
 
   route {
     name                   = "backend-to-internet"
     address_prefix         = "0.0.0.0/0"
     next_hop_type          = "VirtualAppliance"
-    next_hop_in_ip_address = azurerm_network_interface.nva-nic.private_ip_address
+    next_hop_in_ip_address = module.nva-nic.private_ip_address
   }
 }
 
