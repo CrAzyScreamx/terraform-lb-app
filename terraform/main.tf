@@ -249,8 +249,8 @@ resource "azurerm_route_table" "frontend-rules" {
   resource_group_name = azurerm_resource_group.main.name
 
   route {
-    name                   = "frontend-to-backend-lb"
-    address_prefix         = "${azurerm_lb.backend-lb.frontend_ip_configuration[0].private_ip_address}/32"
+    name                   = "frontend-to-backend-subnet"
+    address_prefix         = local.azure_backend_subnet
     next_hop_type          = "VirtualAppliance"
     next_hop_in_ip_address = module.nva-nic.private_ip_address
   }

@@ -408,7 +408,7 @@ const TaskManager: React.FC = () => {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center">
-                    <LoadingSpinner size="lg" />
+                    <LoadingSpinner size="lg" className="mx-auto" />
                     <p className="mt-4 text-gray-600">Loading tasks...</p>
                 </div>
             </div>
