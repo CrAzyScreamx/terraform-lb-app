@@ -98,6 +98,7 @@ resource "azurerm_network_interface_security_group_association" "frontend-nic-ns
 }
 
 module "frontend-vm" {
+  depends_on               = [module.backend-vm]
   source                   = "./modules/linux_vm"
   name                     = "vm-${var.environment_name}-${var.application_name}-frontend"
   location                 = azurerm_resource_group.main.location
@@ -183,7 +184,8 @@ resource "azurerm_network_interface_backend_address_pool_association" "backend-n
   backend_address_pool_id = azurerm_lb_backend_address_pool.backend-pool.id
 }
 
-module "backend-vms" {
+module "backend-vm" {
+  depends_on               = [azurerm_lb.backend-lb, azurerm_mysql_flexible_server.main]
   count                    = var.backend_count
   source                   = "./modules/linux_vm"
   name                     = "vm-${var.environment_name}-${var.application_name}-backend-${count.index}"
@@ -203,8 +205,8 @@ module "backend-vms" {
 
 resource "local_sensitive_file" "backend_ssh_key" {
   count    = var.backend_count
-  content  = module.backend-vms[count.index].tls_private_key.private_key_pem
-  filename = "${path.module}/keys/${module.backend-vms[count.index].vm.name}-key.pem"
+  content  = module.backend-vm[count.index].tls_private_key.private_key_pem
+  filename = "${path.module}/keys/${module.backend-vm[count.index].vm.name}-key.pem"
 }
 
 resource "azurerm_subnet" "mysql-subnet" {
@@ -267,8 +269,8 @@ resource "azurerm_route_table" "backend-rules" {
   resource_group_name = azurerm_resource_group.main.name
 
   route {
-    name                   = "backend-to-frontend-vm"
-    address_prefix         = "${module.frontend-nic.private_ip_address}/32"
+    name                   = "backend-to-frontend"
+    address_prefix         = local.azure_frontend_subnet
     next_hop_type          = "VirtualAppliance"
     next_hop_in_ip_address = module.nva-nic.private_ip_address
   }
