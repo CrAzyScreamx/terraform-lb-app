@@ -24,6 +24,7 @@ module "nva-nic" {
   location                   = azurerm_resource_group.main.location
   resource_group_name        = azurerm_resource_group.main.name
   ip_configuration_subnet_id = azurerm_subnet.nva-subnet.id
+  ip_forwarding_enabled      = true
 }
 
 module "nva-vm" {
@@ -98,7 +99,7 @@ resource "azurerm_network_interface_security_group_association" "frontend-nic-ns
 }
 
 module "frontend-vm" {
-  depends_on               = [module.backend-vm]
+  depends_on               = [module.frontend-nic]
   source                   = "./modules/linux_vm"
   name                     = "vm-${var.environment_name}-${var.application_name}-frontend"
   location                 = azurerm_resource_group.main.location
@@ -136,6 +137,7 @@ module "backend-nic" {
 }
 
 resource "azurerm_lb" "backend-lb" {
+  depends_on          = [module.backend-vm]
   name                = "lb-${var.environment_name}-${var.application_name}-backend"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
@@ -185,7 +187,7 @@ resource "azurerm_network_interface_backend_address_pool_association" "backend-n
 }
 
 module "backend-vm" {
-  depends_on               = [azurerm_lb.backend-lb, azurerm_mysql_flexible_server.main]
+  depends_on               = [azurerm_mysql_flexible_server.main]
   count                    = var.backend_count
   source                   = "./modules/linux_vm"
   name                     = "vm-${var.environment_name}-${var.application_name}-backend-${count.index}"
@@ -259,6 +261,7 @@ resource "azurerm_route_table" "frontend-rules" {
 }
 
 resource "azurerm_subnet_route_table_association" "frontend-subnet-association" {
+  depends_on     = [azurerm_lb.backend-lb]
   subnet_id      = azurerm_subnet.frontend-subnet.id
   route_table_id = azurerm_route_table.frontend-rules.id
 }
@@ -284,6 +287,7 @@ resource "azurerm_route_table" "backend-rules" {
 }
 
 resource "azurerm_subnet_route_table_association" "backend-subnet-association" {
+  depends_on     = [azurerm_lb.backend-lb]
   subnet_id      = azurerm_subnet.backend-subnet.id
   route_table_id = azurerm_route_table.backend-rules.id
 }

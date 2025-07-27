@@ -1,7 +1,8 @@
 resource "azurerm_network_interface" "main" {
-  name                = var.name
-  location            = var.location
-  resource_group_name = var.resource_group_name
+  name                  = var.name
+  location              = var.location
+  resource_group_name   = var.resource_group_name
+  ip_forwarding_enabled = var.ip_forwarding_enabled
 
   ip_configuration {
     name                          = var.ip_configuration_name

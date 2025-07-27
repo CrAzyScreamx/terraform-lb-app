@@ -35,3 +35,9 @@ variable "ip_configuration_public_ip_address_id" {
   type        = string
   default     = null
 }
+
+variable "ip_forwarding_enabled" {
+  description = "Whether IP forwarding is enabled for the network interface."
+  type        = bool
+  default     = false
+}
