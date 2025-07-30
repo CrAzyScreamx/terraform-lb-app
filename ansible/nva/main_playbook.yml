@@ -56,29 +56,61 @@
 
     - name: Configuring UFW
       block:
-        - name: Enable UFW
+        - name: Getting NVA IP
+          shell: hostname -I
+          register: nva_ip
+
+        - name: Deny incoming traffic
           community.general.ufw:
             state: enabled
             policy: deny
+            direction: incoming
         
+        - name: Deny outgoing traffic
+          community.general.ufw:
+            policy: deny
+            direction: outgoing
+        
+        - name: Deny routed traffic
+          community.general.ufw:
+            policy: deny
+            direction: routed
+
+        - name: Allow access from Frontend Subnet to Load Balancer
+          community.general.ufw:
+            rule: routed
+            from: "{{ frontend_subnet }}"
+            to: "{{ lb_ip }}"
+            port: "{{ backend_port }}"
+            proto: tcp
+        
+        - name: Allow outgoing SSH to backend (Port 22)
+          community.general.ufw:
+            rule: allow
+            from: "{{ nva_ip.stdout }}"
+            to: "{{ backend_subnet }}"
+            port: 22
+            proto: tcp
+        
+        - name: Allow outgoing SSH to Frontend
+          community.general.ufw:
+            rule: allow
+            from: "{{ nva_ip.stdout }}"
+            to: "{{ frontend_subnet }}"
+            port: 22
+            proto: tcp
+
+        - name: Allow routed from Backend to Internet
+          community.general.ufw:
+            rule: allow
+            routed: true
+            from: "{{ backend_subnet }}"
+
         - name: Allow SSH
           community.general.ufw:
             rule: allow
             name: 'OpenSSH'
 
-        - name: Allow access from Frontend Subnet to Backend Subnet
-          community.general.ufw:
-            rule: allow
-            from_ip: "{{ frontend_subnet }}"
-            to_ip: "{{ backend_subnet }}"
-            port: "{{ backend_port }}"
-            proto: tcp
-        
-        - name: Set UFW default policy for routed traffic
-          community.general.ufw:
-            policy: allow
-            direction: routed
-        
         - name: Reload UFW
           community.general.ufw:
             state: reloaded

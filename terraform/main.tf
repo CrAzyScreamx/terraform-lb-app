@@ -40,6 +40,7 @@ module "nva-vm" {
     backend_subnet  = local.azure_backend_subnet
     frontend_subnet = local.azure_frontend_subnet
     backend_port    = var.load_balancer_backend_port
+    lb_ip           = azurerm_lb.backend-lb.frontend_ip_configuration[0].private_ip_address
   }))
 }
 
